@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Login / Signup</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      padding: 20px;
+    }
+    .container {
+      max-width: 400px;
+      margin: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.2);
+    }
+    h2 { text-align: center; }
+    input, button {
+      width: 100%;
+      margin: 8px 0;
+      padding: 10px;
+      border: 1px solid #333;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+    button {
+      background: black;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h2>User Login / Signup</h2>
+    <input type="text" id="username" placeholder="Enter username" />
+    <input type="password" id="password" placeholder="Enter password" />
+    <button onclick="signup()">Sign Up</button>
+    <button onclick="login()">Login</button>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, doc, setDoc, getDoc } 
+      from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    // ✅ Replace with your Firebase config
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+
+    // Init Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // ✅ Sign up
+    window.signup = async function(){
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value.trim();
+
+      if(!username || !password){
+        return alert("Please enter username and password");
+      }
+
+      const userRef = doc(db, "users", username);
+      const userSnap = await getDoc(userRef);
+
+      if(userSnap.exists()){
+        alert("User already exists! Please login.");
+        return;
+      }
+
+      await setDoc(userRef, {
+        password: password,
+        balance: 5,   // Default balance
+        pin: ""       // No pin yet
+      });
+
+      localStorage.setItem("loggedInUser", username);
+      alert("Signup successful! Redirecting to dashboard...");
+      window.location.href = "dashboard.html";
+    }
+
+    // ✅ Login
+    window.login = async function(){
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value.trim();
+
+      if(!username || !password){
+        return alert("Please enter username and password");
+      }
+
+      const userRef = doc(db, "users", username);
+      const userSnap = await getDoc(userRef);
+
+      if(userSnap.exists()){
+        if(userSnap.data().password === password){
+          localStorage.setItem("loggedInUser", username);
+          alert("Login successful! Redirecting to dashboard...");
+          window.location.href = "dashboard.html";
+        } else {
+          alert("Incorrect password!");
+        }
+      } else {
+        alert("User not found! Please sign up.");
+      }
+    }
+
+    // ✅ Auto-login if already logged in
+    window.onload = function(){
+      const loggedInUser = localStorage.getItem("loggedInUser");
+      if(loggedInUser){
+        window.location.href = "dashboard.html";
+      }
+    }
+  </script>
+</body>
+</html>

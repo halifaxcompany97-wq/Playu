@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>User Dashboard</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #FFE85C;
+      color: #000;
+    }
+    .wrap { max-width: 400px; margin: 0 auto; padding: 20px; }
+    .header { display: flex; align-items: center; justify-content: space-between; }
+    .header .left { display: flex; align-items: center; gap: 10px; }
+    .avatar { width: 40px; height: 40px; border-radius: 50%; background: #ccc; }
+    .currency-select { font-size: 16px; padding: 5px; border-radius: 6px; border: 1px solid #333; background: #fff; cursor: pointer; }
+    .earnings { margin: 15px 0; font-size: 20px; font-weight: bold; }
+    .money { font-size: 36px; font-weight: bold; }
+    .pills { display: flex; justify-content: space-between; margin: 20px 0; }
+    .pill { background: #000; color: #fff; border: none; padding: 10px 18px; border-radius: 20px; font-weight: bold; cursor: pointer; }
+    .panel { background: #222; color: #fff; padding: 20px; border-radius: 10px; text-align: center; }
+    .panel h2 { font-size: 18px; margin-bottom: 10px; }
+    .panel input { width: 100%; padding: 10px; border-radius: 20px; border: none; margin-bottom: 10px; font-size: 16px; }
+    .enter { background: green; color: #fff; padding: 10px 20px; border: none; border-radius: 20px; font-weight: bold; cursor: pointer; }
+    .fineprint { margin-top: 10px; font-size: 12px; line-height: 1.4; }
+    .footer-pills { display: flex; justify-content: space-between; margin-top: 20px; }
+    .bigpill { background: #000; color: #fff; border: none; padding: 15px 20px; border-radius: 20px; font-weight: bold; cursor: pointer; flex: 1; margin: 0 5px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div class="left">
+        <div class="avatar"></div>
+        <div id="welcomeUser">Hi User</div>
+      </div>
+      <select class="currency-select" id="currency">
+        <option value="usd" selected>$ USD</option>
+        <option value="php">₱ PHP</option>
+        <option value="gbp">£ GBP</option>
+        <option value="eur">€ EUR</option>
+      </select>
+    </div>
+
+    <div class="earnings">Earnings:</div>
+    <div class="money" id="earningsAmount">$0 👁️</div>
+
+    <div class="pills">
+      <button class="pill" id="addPaymentBtn">Add payment method</button>
+      <button class="pill" id="withdrawBtn">Withdraw</button>
+    </div>
+
+    <div id="paymentSection" style="display:none; margin-bottom:20px;">
+      <select id="paymentMethod">
+        <option value="">Select Method</option>
+        <option value="paypal">PayPal</option>
+        <option value="gcash">GCash</option>
+        <option value="bank">Bank</option>
+      </select>
+      <input type="text" id="paymentInput" placeholder="Enter details" style="display:none;">
+      <button class="pill" id="savePayment">Save Payment Method</button>
+    </div>
+
+    <div class="panel">
+      <h2>Enter activation pin here</h2>
+      <input type="text" id="pinInput" placeholder="Enter Pin">
+      <button class="enter" id="enterPinBtn">Enter</button>
+      <div class="fineprint">
+        To ensure a smooth and secure withdrawal process, an activation fee is required before
+        earnings can be withdrawn from your dashboard.
+      </div>
+    </div>
+
+    <div class="footer-pills">
+      <button class="bigpill" id="buyPinBtn">Click here to buy activation pin</button>
+      <button class="bigpill" id="seeMoreBtn">See more</button>
+    </div>
+  </div>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"></script>
+  
+  <script>
+    // ✅ Your Firebase config (replace with your Firebase project details)
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+
+    // Init Firebase
+    const app = firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // DOM Elements
+    const earningsElement = document.getElementById("earningsAmount");
+    const currencySelect = document.getElementById("currency");
+    const welcomeUser = document.getElementById("welcomeUser");
+
+    // Currency conversion
+    const rates = { usd: 1, php: 56, gbp: 0.79, eur: 0.92 };
+    const symbols = { usd: "$", php: "₱", gbp: "£", eur: "€" };
+
+    // Load logged-in user
+    const loggedUser = localStorage.getItem("loggedInUser");
+    if (loggedUser) {
+      welcomeUser.textContent = `Hi ${loggedUser}`;
+      loadUserBalance(loggedUser);
+    } else {
+      window.location.href = "login.html"; // force login if no user
+    }
+
+    // Load balance from Firestore
+    async function loadUserBalance(username) {
+      const docRef = db.collection("users").doc(username);
+      const docSnap = await docRef.get();
+      if (docSnap.exists) {
+        const data = docSnap.data();
+        updateEarningsDisplay(data.balance || 0);
+      } else {
+        // If no data, create default balance
+        await docRef.set({ balance: 5, pin: null });
+        updateEarningsDisplay(5);
+      }
+    }
+
+    function updateEarningsDisplay(amount) {
+      const selected = currencySelect.value;
+      const converted = (amount * rates[selected]).toFixed(2);
+      earningsElement.textContent = `${symbols[selected]}${converted} 👁️`;
+    }
+
+    // Update balance display when currency changes
+    currencySelect.addEventListener("change", async () => {
+      const username = localStorage.getItem("loggedInUser");
+      if (username) loadUserBalance(username);
+    });
+
+    // Activation pin check
+    let pinCorrect = false;
+    document.getElementById("enterPinBtn").addEventListener("click", async () => {
+      const username = localStorage.getItem("loggedInUser");
+      const pinInput = document.getElementById("pinInput").value;
+      if (!username) return;
+
+      const docRef = db.collection("users").doc(username);
+      const docSnap = await docRef.get();
+      if (docSnap.exists && docSnap.data().pin === pinInput) {
+        pinCorrect = true;
+        alert("✅ Pin correct, you can now withdraw.");
+      } else {
+        pinCorrect = false;
+        alert("❌ Incorrect pin!");
+      }
+    });
+
+    // Withdraw button
+    document.getElementById("withdrawBtn").addEventListener("click", async () => {
+      const username = localStorage.getItem("loggedInUser");
+      if (!username) return;
+      const docRef = db.collection("users").doc(username);
+      const docSnap = await docRef.get();
+
+      if (!docSnap.exists) return;
+      const balance = docSnap.data().balance || 0;
+
+      if (!pinCorrect) {
+        alert("⚠️ Enter activation pin first!");
+        return;
+      }
+      if (balance < 35) {
+        alert("⚠️ Balance must be at least $35 to withdraw.");
+        return;
+      }
+      alert("💸 Withdrawal successful!");
+    });
+
+    // Buy pin button
+    document.getElementById("buyPinBtn").addEventListener("click", () => {
+      alert("📩 Contact your project manager to buy activation pin.");
+    });
+
+    // See more button
+    document.getElementById("seeMoreBtn").addEventListener("click", () => {
+      alert("ℹ️ The activation pin is required to secure withdrawals and verify account ownership.");
+    });
+
+    // Payment method toggle
+    document.getElementById("addPaymentBtn").addEventListener("click", () => {
+      const section = document.getElementById("paymentSection");
+      section.style.display = section.style.display === "none" ? "block" : "none";
+    });
+
+    // Payment method selection
+    document.getElementById("paymentMethod").addEventListener("change", (e) => {
+      const input = document.getElementById("paymentInput");
+      if (e.target.value === "paypal") {
+        input.placeholder = "Enter PayPal username";
+        input.style.display = "block";
+      } else if (e.target.value === "gcash") {
+        input.placeholder = "Enter GCash number";
+        input.style.display = "block";
+      } else if (e.target.value === "bank") {
+        input.placeholder = "Enter Bank account number";
+        input.style.display = "block";
+      } else {
+        input.style.display = "none";
+      }
+    });
+  </script>
+</body>
+</html>
